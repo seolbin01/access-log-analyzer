@@ -1,0 +1,7 @@
+spring:
+  application:
+    name:
+      access-log-analyzer
+
+server:
+  port: 28080
