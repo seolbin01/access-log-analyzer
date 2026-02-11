@@ -2,18 +2,24 @@ package benny.accessloganalyzer.service;
 
 import benny.accessloganalyzer.global.exception.BusinessException;
 import benny.accessloganalyzer.model.AccessLogEntry;
+import benny.accessloganalyzer.model.AnalysisEntry;
 import benny.accessloganalyzer.model.AnalysisResult;
+import benny.accessloganalyzer.model.AnalysisStatus;
 import benny.accessloganalyzer.parser.AccessLogCsvParser;
 import benny.accessloganalyzer.parser.ParseResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,19 +29,49 @@ public class AnalysisService {
 
     private final AccessLogCsvParser parser;
     private final int maxLines;
-    private final ConcurrentHashMap<String, AnalysisResult> store = new ConcurrentHashMap<>();
+    private final Executor executor;
+    private final ConcurrentHashMap<String, AnalysisEntry> store = new ConcurrentHashMap<>();
+    private final AtomicLong orderSequence = new AtomicLong();
 
     @Autowired
-    public AnalysisService(AccessLogCsvParser parser) {
-        this(parser, DEFAULT_MAX_LINES);
+    public AnalysisService(AccessLogCsvParser parser, Executor analysisExecutor) {
+        this(parser, DEFAULT_MAX_LINES, analysisExecutor);
     }
 
-    AnalysisService(AccessLogCsvParser parser, int maxLines) {
+    AnalysisService(AccessLogCsvParser parser, int maxLines, Executor executor) {
         this.parser = parser;
         this.maxLines = maxLines;
+        this.executor = executor;
     }
 
-    public AnalysisResult analyze(InputStream inputStream) {
+    public String submitAnalysis(byte[] fileBytes) {
+        String analysisId = UUID.randomUUID().toString();
+        AnalysisEntry entry = new AnalysisEntry(analysisId, orderSequence.incrementAndGet());
+        store.put(analysisId, entry);
+
+        try {
+            executor.execute(() -> executeAnalysis(analysisId, fileBytes));
+        } catch (RejectedExecutionException e) {
+            store.remove(analysisId);
+            throw BusinessException.analysisQueueFull("분석 큐가 가득 찼습니다. 잠시 후 다시 시도해주세요.");
+        }
+
+        return analysisId;
+    }
+
+    private void executeAnalysis(String analysisId, byte[] fileBytes) {
+        AnalysisEntry entry = store.get(analysisId);
+        entry.startProcessing();
+
+        try {
+            AnalysisResult result = analyze(new ByteArrayInputStream(fileBytes), analysisId);
+            entry.complete(result);
+        } catch (Exception e) {
+            entry.fail(e.getMessage());
+        }
+    }
+
+    private AnalysisResult analyze(InputStream inputStream, String analysisId) {
         ParseResult parseResult = parser.parse(inputStream);
 
         validate(parseResult);
@@ -62,9 +98,7 @@ public class AnalysisService {
                         AccessLogEntry::clientIp,
                         Collectors.counting()));
 
-        String analysisId = UUID.randomUUID().toString();
-
-        AnalysisResult result = new AnalysisResult(
+        return new AnalysisResult(
                 analysisId,
                 LocalDateTime.now(),
                 entries.size(),
@@ -76,17 +110,22 @@ public class AnalysisService {
                 parseResult.errorCount(),
                 parseResult.errorSamples()
         );
-
-        store.put(analysisId, result);
-        return result;
     }
 
-    public AnalysisResult getResult(String analysisId) {
-        AnalysisResult result = store.get(analysisId);
-        if (result == null) {
+    public AnalysisEntry getEntry(String analysisId) {
+        AnalysisEntry entry = store.get(analysisId);
+        if (entry == null) {
             throw BusinessException.analysisNotFound("분석 결과를 찾을 수 없습니다: " + analysisId);
         }
-        return result;
+        return entry;
+    }
+
+    public int getQueuePosition(AnalysisEntry targetEntry) {
+        long position = store.values().stream()
+                .filter(e -> e.getStatus() == AnalysisStatus.QUEUED)
+                .filter(e -> e.getSubmittedOrder() <= targetEntry.getSubmittedOrder())
+                .count();
+        return (int) position;
     }
 
     private void validate(ParseResult parseResult) {
