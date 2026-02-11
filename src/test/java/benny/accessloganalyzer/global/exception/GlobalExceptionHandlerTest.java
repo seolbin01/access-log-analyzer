@@ -11,8 +11,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest
@@ -46,6 +48,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/unexpected-error")
         void unexpectedError() {
             throw new RuntimeException("예상치 못한 오류");
+        }
+
+        @GetMapping("/test/max-upload-size")
+        void maxUploadSize() {
+            throw new MaxUploadSizeExceededException(50 * 1024 * 1024);
         }
     }
 
@@ -94,6 +101,28 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
                 .andExpect(jsonPath("$.message").value("서버 내부 오류가 발생했습니다"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @DisplayName("MaxUploadSizeExceededException 발생 시 400과 FILE_SIZE_EXCEEDED 코드를 반환한다")
+    @Test
+    void handleMaxUploadSizeExceeded() throws Exception {
+        mockMvc.perform(get("/test/max-upload-size"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("FILE_SIZE_EXCEEDED"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @DisplayName("파일 파라미터 누락 시 400과 MISSING_FILE 코드를 반환한다")
+    @Test
+    void handleMissingFile() throws Exception {
+        mockMvc.perform(multipart("/analysis"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("MISSING_FILE"))
                 .andExpect(jsonPath("$.timestamp").exists());
     }
 
