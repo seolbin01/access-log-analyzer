@@ -1,6 +1,7 @@
 package benny.accessloganalyzer.parser;
 
 import benny.accessloganalyzer.model.AccessLogEntry;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Component
 public class AccessLogCsvParser {
 
@@ -55,6 +57,11 @@ public class AccessLogCsvParser {
             }
         } catch (IOException e) {
             throw new RuntimeException("CSV 파일 읽기 실패", e);
+        }
+
+        log.info("CSV 파싱 완료: totalLines={}, successCount={}, errorCount={}", totalLines, entries.size(), errorCount);
+        if (errorCount > 0) {
+            log.warn("파싱 오류 발생: errorCount={}, samples={}", errorCount, errorSamples);
         }
 
         return new ParseResult(entries, totalLines, errorCount, errorSamples);

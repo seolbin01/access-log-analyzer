@@ -7,6 +7,7 @@ import benny.accessloganalyzer.model.AnalysisResult;
 import benny.accessloganalyzer.model.AnalysisStatus;
 import benny.accessloganalyzer.parser.AccessLogCsvParser;
 import benny.accessloganalyzer.parser.ParseResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class AnalysisService {
 
@@ -63,10 +65,18 @@ public class AnalysisService {
         AnalysisEntry entry = store.get(analysisId);
         entry.startProcessing();
 
+        log.info("분석 시작: analysisId={}", analysisId);
+        long startNanos = System.nanoTime();
+
         try {
             AnalysisResult result = analyze(new ByteArrayInputStream(fileBytes), analysisId);
             entry.complete(result);
+
+            long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+            log.info("분석 완료: analysisId={}, totalLines={}, errorCount={}, duration={}ms",
+                    analysisId, result.totalLines(), result.errorCount(), durationMs);
         } catch (Exception e) {
+            log.error("분석 실패: analysisId={}", analysisId, e);
             entry.fail(e.getMessage());
         }
     }
