@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -124,6 +126,63 @@ class IpInfoClientTest {
         IpInfo cached = cache.getIfPresent("5.5.5.5");
         assertThat(cached).isNotNull();
         assertThat(cached.country()).isEqualTo("JP");
+        mockServer.verify();
+    }
+
+    // --- lookupTopIps ---
+
+    @DisplayName("lookupTopIps는 상위 N개 IP만 조회한다")
+    @Test
+    void lookupTopIpsOnlyLooksUpTopN() {
+        Map<String, Long> ipCounts = Map.of(
+                "10.0.0.1", 100L,
+                "10.0.0.2", 50L,
+                "10.0.0.3", 10L
+        );
+
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.0.1?token=test-token"))
+                .andRespond(withSuccess("""
+                        {"country":"KR","region":"Seoul","city":"Seoul","org":"KT"}
+                        """, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.0.2?token=test-token"))
+                .andRespond(withSuccess("""
+                        {"country":"US","region":"Virginia","city":"Ashburn","org":"AWS"}
+                        """, MediaType.APPLICATION_JSON));
+
+        Map<String, IpInfo> result = client.lookupTopIps(ipCounts, 2);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get("10.0.0.1").country()).isEqualTo("KR");
+        assertThat(result.get("10.0.0.2").country()).isEqualTo("US");
+        assertThat(result).doesNotContainKey("10.0.0.3");
+        mockServer.verify();
+    }
+
+    @DisplayName("lookupTopIps에서 일부 IP 실패 시 해당 IP만 UNKNOWN이다")
+    @Test
+    void lookupTopIpsPartialFailure() {
+        Map<String, Long> ipCounts = Map.of(
+                "10.0.1.1", 80L,
+                "10.0.1.2", 20L
+        );
+
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.1.1?token=test-token"))
+                .andRespond(withSuccess("""
+                        {"country":"JP","region":"Tokyo","city":"Tokyo","org":"NTT"}
+                        """, MediaType.APPLICATION_JSON));
+        // 10.0.1.2는 3번 모두 실패
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.1.2?token=test-token"))
+                .andRespond(withServerError());
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.1.2?token=test-token"))
+                .andRespond(withServerError());
+        mockServer.expect(requestTo("https://ipinfo.io/10.0.1.2?token=test-token"))
+                .andRespond(withServerError());
+
+        Map<String, IpInfo> result = client.lookupTopIps(ipCounts, 2);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get("10.0.1.1").country()).isEqualTo("JP");
+        assertThat(result.get("10.0.1.2")).isEqualTo(IpInfo.unknown());
         mockServer.verify();
     }
 }

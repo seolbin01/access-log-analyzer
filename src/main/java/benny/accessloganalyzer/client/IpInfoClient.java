@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @Slf4j
 @Service
 public class IpInfoClient {
@@ -61,5 +64,16 @@ public class IpInfoClient {
         }
 
         return IpInfo.unknown();
+    }
+
+    public Map<String, IpInfo> lookupTopIps(Map<String, Long> ipCounts, int topN) {
+        Map<String, IpInfo> result = new LinkedHashMap<>();
+
+        ipCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(topN)
+                .forEach(entry -> result.put(entry.getKey(), lookup(entry.getKey())));
+
+        return result;
     }
 }
