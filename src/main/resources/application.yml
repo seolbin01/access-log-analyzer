@@ -10,6 +10,16 @@ spring:
 server:
   port: 28080
 
+ipinfo:
+  token: ${IPINFO_TOKEN:}
+  base-url: https://ipinfo.io
+  timeout: 5000
+  retry:
+    max-attempts: 2
+  cache:
+    max-size: 10000
+    ttl-seconds: 3600
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
