@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Tag(name = "Analysis", description = "로그 분석 API")
 @RestController
@@ -63,6 +64,6 @@ public class AnalysisController {
             @PathVariable String analysisId,
             @RequestParam(defaultValue = "10") int top) {
         AnalysisResult result = analysisService.getResult(analysisId);
-        return AnalysisResultResponse.from(result, top);
+        return AnalysisResultResponse.from(result, top, Map.of());
     }
 }

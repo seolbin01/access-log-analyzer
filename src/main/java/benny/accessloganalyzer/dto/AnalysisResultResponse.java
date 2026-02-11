@@ -1,5 +1,6 @@
 package benny.accessloganalyzer.dto;
 
+import benny.accessloganalyzer.client.IpInfo;
 import benny.accessloganalyzer.model.AnalysisResult;
 
 import java.math.BigDecimal;
@@ -23,10 +24,11 @@ public record AnalysisResultResponse(
 
     public record PathCount(String path, long count, double percentage) {}
     public record StatusCodeCount(String statusCode, long count, double percentage) {}
-    public record IpCount(String ip, long count, double percentage) {}
+    public record IpCount(String ip, long count, double percentage,
+                          String country, String region, String city, String org) {}
     public record ErrorInfo(int errorCount, List<String> errorSamples) {}
 
-    public static AnalysisResultResponse from(AnalysisResult result, int topN) {
+    public static AnalysisResultResponse from(AnalysisResult result, int topN, Map<String, IpInfo> ipInfoMap) {
         int total = result.totalRequests();
 
         Map<String, Double> statusGroupRatios = buildStatusGroupRatios(result.statusGroupCounts(), total);
@@ -46,7 +48,11 @@ public record AnalysisResultResponse(
         List<IpCount> topIps = result.ipCounts().entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .limit(topN)
-                .map(e -> new IpCount(e.getKey(), e.getValue(), percentage(e.getValue(), total)))
+                .map(e -> {
+                    IpInfo info = ipInfoMap.getOrDefault(e.getKey(), IpInfo.unknown());
+                    return new IpCount(e.getKey(), e.getValue(), percentage(e.getValue(), total),
+                            info.country(), info.region(), info.city(), info.org());
+                })
                 .toList();
 
         ErrorInfo errorInfo = new ErrorInfo(result.errorCount(), result.errorSamples());
