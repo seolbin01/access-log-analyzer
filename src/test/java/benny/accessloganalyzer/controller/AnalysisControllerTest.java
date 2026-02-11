@@ -1,5 +1,7 @@
 package benny.accessloganalyzer.controller;
 
+import benny.accessloganalyzer.client.IpInfo;
+import benny.accessloganalyzer.client.IpInfoClient;
 import benny.accessloganalyzer.global.exception.BusinessException;
 import benny.accessloganalyzer.global.exception.GlobalExceptionHandler;
 import benny.accessloganalyzer.model.AnalysisResult;
@@ -20,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -36,6 +40,9 @@ class AnalysisControllerTest {
 
     @MockitoBean
     private AnalysisService analysisService;
+
+    @MockitoBean
+    private IpInfoClient ipInfoClient;
 
     private AnalysisResult sampleResult() {
         return new AnalysisResult(
@@ -98,6 +105,7 @@ class AnalysisControllerTest {
     @Test
     void getAnalysisResultSuccess() throws Exception {
         given(analysisService.getResult("test-uuid-1234")).willReturn(sampleResult());
+        given(ipInfoClient.lookupTopIps(anyMap(), anyInt())).willReturn(Map.of());
 
         mockMvc.perform(get("/analysis/test-uuid-1234"))
                 .andExpect(status().isOk())
@@ -136,6 +144,7 @@ class AnalysisControllerTest {
                 100, 0, List.of()
         );
         given(analysisService.getResult("test-uuid-top")).willReturn(result);
+        given(ipInfoClient.lookupTopIps(anyMap(), anyInt())).willReturn(Map.of());
 
         mockMvc.perform(get("/analysis/test-uuid-top").param("top", "2"))
                 .andExpect(status().isOk())
@@ -148,11 +157,29 @@ class AnalysisControllerTest {
     @Test
     void getAnalysisResultDefaultTop() throws Exception {
         given(analysisService.getResult("test-uuid-1234")).willReturn(sampleResult());
+        given(ipInfoClient.lookupTopIps(anyMap(), anyInt())).willReturn(Map.of());
 
         mockMvc.perform(get("/analysis/test-uuid-1234"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.topPaths.length()").value(1))
                 .andExpect(jsonPath("$.topStatusCodes.length()").value(2))
                 .andExpect(jsonPath("$.topIps.length()").value(1));
+    }
+
+    @DisplayName("GET 응답의 topIps에 IP 지리 정보가 포함된다")
+    @Test
+    void getAnalysisResultIncludesIpGeoInfo() throws Exception {
+        given(analysisService.getResult("test-uuid-1234")).willReturn(sampleResult());
+        given(ipInfoClient.lookupTopIps(anyMap(), anyInt())).willReturn(
+                Map.of("1.1.1.1", new IpInfo("AU", "New South Wales", "Sydney", "Cloudflare"))
+        );
+
+        mockMvc.perform(get("/analysis/test-uuid-1234"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.topIps[0].ip").value("1.1.1.1"))
+                .andExpect(jsonPath("$.topIps[0].country").value("AU"))
+                .andExpect(jsonPath("$.topIps[0].region").value("New South Wales"))
+                .andExpect(jsonPath("$.topIps[0].city").value("Sydney"))
+                .andExpect(jsonPath("$.topIps[0].org").value("Cloudflare"));
     }
 }
