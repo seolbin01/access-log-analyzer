@@ -1,9 +1,12 @@
 package benny.accessloganalyzer.controller;
 
 import benny.accessloganalyzer.dto.AnalysisResponse;
+import benny.accessloganalyzer.dto.AnalysisResultResponse;
 import benny.accessloganalyzer.global.exception.BusinessException;
 import benny.accessloganalyzer.model.AnalysisResult;
 import benny.accessloganalyzer.service.AnalysisService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +35,13 @@ public class AnalysisController {
         } catch (IOException e) {
             throw BusinessException.invalidLogFile("파일을 읽을 수 없습니다: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/analysis/{analysisId}")
+    public AnalysisResultResponse getAnalysisResult(
+            @PathVariable String analysisId,
+            @RequestParam(defaultValue = "10") int top) {
+        AnalysisResult result = analysisService.getResult(analysisId);
+        return AnalysisResultResponse.from(result, top);
     }
 }
