@@ -1,5 +1,6 @@
 package benny.accessloganalyzer.dto;
 
+import benny.accessloganalyzer.client.IpInfo;
 import benny.accessloganalyzer.model.AnalysisResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class AnalysisResultResponseTest {
                 1050, 50, List.of("error line 1")
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.analysisId()).isEqualTo("test-id");
         assertThat(response.analyzedAt()).isEqualTo(FIXED_TIME);
@@ -60,7 +61,7 @@ class AnalysisResultResponseTest {
                 1000, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.statusGroupRatios())
                 .containsEntry("2xx", 80.0)
@@ -79,7 +80,7 @@ class AnalysisResultResponseTest {
                 3, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         // 1/3 = 33.3333... → 33.3
         // 2/3 = 66.6666... → 66.7
@@ -102,7 +103,7 @@ class AnalysisResultResponseTest {
                 100, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 3);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 3, Map.of());
 
         assertThat(response.topPaths()).hasSize(3);
         assertThat(response.topPaths().get(0).path()).isEqualTo("/b");
@@ -124,7 +125,7 @@ class AnalysisResultResponseTest {
                 100, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.topStatusCodes()).hasSize(3);
         assertThat(response.topStatusCodes().get(0).statusCode()).isEqualTo("200");
@@ -146,7 +147,7 @@ class AnalysisResultResponseTest {
                 100, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.topIps()).hasSize(2);
         assertThat(response.topIps().get(0).ip()).isEqualTo("1.1.1.1");
@@ -167,10 +168,56 @@ class AnalysisResultResponseTest {
                 50, 0, List.of()
         );
 
-        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10);
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.topPaths()).hasSize(1);
         assertThat(response.topStatusCodes()).hasSize(1);
         assertThat(response.topIps()).hasSize(1);
+    }
+
+    @DisplayName("ipInfoMap에 IP 정보가 있으면 topIps에 지리 정보가 매핑된다")
+    @Test
+    void topIpsIncludesGeoInfoFromIpInfoMap() {
+        AnalysisResult result = createResult(
+                100,
+                Map.of("200", 100L),
+                Map.of("2xx", 100L),
+                Map.of("/api", 100L),
+                Map.of("1.1.1.1", 70L, "2.2.2.2", 30L),
+                100, 0, List.of()
+        );
+
+        Map<String, IpInfo> ipInfoMap = Map.of(
+                "1.1.1.1", new IpInfo("AU", "New South Wales", "Sydney", "Cloudflare"),
+                "2.2.2.2", new IpInfo("US", "California", "Los Angeles", "Google")
+        );
+
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, ipInfoMap);
+
+        assertThat(response.topIps().get(0).country()).isEqualTo("AU");
+        assertThat(response.topIps().get(0).region()).isEqualTo("New South Wales");
+        assertThat(response.topIps().get(0).city()).isEqualTo("Sydney");
+        assertThat(response.topIps().get(0).org()).isEqualTo("Cloudflare");
+        assertThat(response.topIps().get(1).country()).isEqualTo("US");
+    }
+
+    @DisplayName("ipInfoMap에 없는 IP는 UNKNOWN으로 표시된다")
+    @Test
+    void topIpsShowsUnknownForMissingIpInfo() {
+        AnalysisResult result = createResult(
+                100,
+                Map.of("200", 100L),
+                Map.of("2xx", 100L),
+                Map.of("/api", 100L),
+                Map.of("1.1.1.1", 100L),
+                100, 0, List.of()
+        );
+
+        AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
+
+        assertThat(response.topIps().get(0).country()).isEqualTo("UNKNOWN");
+        assertThat(response.topIps().get(0).region()).isEqualTo("UNKNOWN");
+        assertThat(response.topIps().get(0).city()).isEqualTo("UNKNOWN");
+        assertThat(response.topIps().get(0).org()).isEqualTo("UNKNOWN");
     }
 }

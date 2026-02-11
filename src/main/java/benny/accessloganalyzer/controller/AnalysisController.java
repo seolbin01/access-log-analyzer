@@ -1,5 +1,7 @@
 package benny.accessloganalyzer.controller;
 
+import benny.accessloganalyzer.client.IpInfo;
+import benny.accessloganalyzer.client.IpInfoClient;
 import benny.accessloganalyzer.dto.AnalysisResponse;
 import benny.accessloganalyzer.dto.AnalysisResultResponse;
 import benny.accessloganalyzer.global.exception.BusinessException;
@@ -21,15 +23,18 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Tag(name = "Analysis", description = "로그 분석 API")
 @RestController
 public class AnalysisController {
 
     private final AnalysisService analysisService;
+    private final IpInfoClient ipInfoClient;
 
-    public AnalysisController(AnalysisService analysisService) {
+    public AnalysisController(AnalysisService analysisService, IpInfoClient ipInfoClient) {
         this.analysisService = analysisService;
+        this.ipInfoClient = ipInfoClient;
     }
 
     @Operation(summary = "로그 파일 업로드 및 분석", description = "CSV 형식의 접속 로그 파일을 업로드하여 분석을 실행합니다")
@@ -63,6 +68,7 @@ public class AnalysisController {
             @PathVariable String analysisId,
             @RequestParam(defaultValue = "10") int top) {
         AnalysisResult result = analysisService.getResult(analysisId);
-        return AnalysisResultResponse.from(result, top);
+        Map<String, IpInfo> ipInfoMap = ipInfoClient.lookupTopIps(result.ipCounts(), top);
+        return AnalysisResultResponse.from(result, top, ipInfoMap);
     }
 }
