@@ -2,6 +2,7 @@ package benny.accessloganalyzer.dto;
 
 import benny.accessloganalyzer.client.IpInfo;
 import benny.accessloganalyzer.model.AnalysisResult;
+import benny.accessloganalyzer.model.AnalysisStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -12,6 +13,7 @@ import java.util.Map;
 
 public record AnalysisResultResponse(
         String analysisId,
+        AnalysisStatus status,
         LocalDateTime analyzedAt,
         int totalRequests,
         int totalLines,
@@ -59,6 +61,7 @@ public record AnalysisResultResponse(
 
         return new AnalysisResultResponse(
                 result.analysisId(),
+                AnalysisStatus.COMPLETED,
                 result.analyzedAt(),
                 total,
                 result.totalLines(),

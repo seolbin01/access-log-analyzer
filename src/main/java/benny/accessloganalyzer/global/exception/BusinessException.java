@@ -26,4 +26,8 @@ public class BusinessException extends RuntimeException {
     public static BusinessException externalApiError(String message) {
         return new BusinessException(HttpStatus.BAD_GATEWAY, "EXTERNAL_API_ERROR", message);
     }
+
+    public static BusinessException analysisQueueFull(String message) {
+        return new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "ANALYSIS_QUEUE_FULL", message);
+    }
 }

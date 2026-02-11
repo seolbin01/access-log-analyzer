@@ -2,6 +2,7 @@ package benny.accessloganalyzer.dto;
 
 import benny.accessloganalyzer.client.IpInfo;
 import benny.accessloganalyzer.model.AnalysisResult;
+import benny.accessloganalyzer.model.AnalysisStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +45,7 @@ class AnalysisResultResponseTest {
         AnalysisResultResponse response = AnalysisResultResponse.from(result, 10, Map.of());
 
         assertThat(response.analysisId()).isEqualTo("test-id");
+        assertThat(response.status()).isEqualTo(AnalysisStatus.COMPLETED);
         assertThat(response.analyzedAt()).isEqualTo(FIXED_TIME);
         assertThat(response.totalRequests()).isEqualTo(1000);
         assertThat(response.totalLines()).isEqualTo(1050);

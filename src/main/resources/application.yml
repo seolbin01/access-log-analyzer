@@ -20,6 +20,12 @@ ipinfo:
     max-size: 10000
     ttl-seconds: 3600
 
+analysis:
+  async:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 10
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
