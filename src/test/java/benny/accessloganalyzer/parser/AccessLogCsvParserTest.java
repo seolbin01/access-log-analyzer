@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -34,9 +36,11 @@ class AccessLogCsvParserTest {
         void parsesValidCsv() {
             String csv = HEADER + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            List<AccessLogEntry> captured = new ArrayList<>();
+            ParseResult result = parser.parse(toInputStream(csv), captured::add);
 
-            assertThat(result.entries()).hasSize(1);
+            assertThat(result.successCount()).isEqualTo(1);
+            assertThat(captured).hasSize(1);
             assertThat(result.totalLines()).isEqualTo(1);
             assertThat(result.errorCount()).isZero();
         }
@@ -46,8 +50,9 @@ class AccessLogCsvParserTest {
         void mapsFieldsCorrectly() {
             String csv = HEADER + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
-            AccessLogEntry entry = result.entries().getFirst();
+            List<AccessLogEntry> captured = new ArrayList<>();
+            parser.parse(toInputStream(csv), captured::add);
+            AccessLogEntry entry = captured.getFirst();
 
             assertThat(entry.timestamp()).isEqualTo("1/29/2026, 5:44:10.000 AM");
             assertThat(entry.clientIp()).isEqualTo("121.158.115.86");
@@ -69,8 +74,9 @@ class AccessLogCsvParserTest {
             String line = "\"1/29/2026, 5:44:10.000 AM\",112.144.4.88,GET,/assets/test.css,\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\",200,HTTP/1.1,2594,2653,0,TLSv1.3,/assets/test.css";
             String csv = HEADER + "\n" + line;
 
-            ParseResult result = parser.parse(toInputStream(csv));
-            AccessLogEntry entry = result.entries().getFirst();
+            List<AccessLogEntry> captured = new ArrayList<>();
+            parser.parse(toInputStream(csv), captured::add);
+            AccessLogEntry entry = captured.getFirst();
 
             assertThat(entry.userAgent()).isEqualTo("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
         }
@@ -81,8 +87,9 @@ class AccessLogCsvParserTest {
             String line = "\"1/29/2026, 5:44:19.000 AM\",58.238.247.166,GET,/launcher/launcher,\"Mozilla/5.0 (Windows NT 10.0; Win64; x64)\",301,HTTP/1.1,475,442,0,,/launcher/launcher";
             String csv = HEADER + "\n" + line;
 
-            ParseResult result = parser.parse(toInputStream(csv));
-            AccessLogEntry entry = result.entries().getFirst();
+            List<AccessLogEntry> captured = new ArrayList<>();
+            parser.parse(toInputStream(csv), captured::add);
+            AccessLogEntry entry = captured.getFirst();
 
             assertThat(entry.httpStatus()).isEqualTo(301);
             assertThat(entry.sslProtocol()).isEmpty();
@@ -93,9 +100,9 @@ class AccessLogCsvParserTest {
         void parsesMultipleLines() {
             String csv = HEADER + "\n" + VALID_LINE + "\n" + VALID_LINE + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
-            assertThat(result.entries()).hasSize(3);
+            assertThat(result.successCount()).isEqualTo(3);
             assertThat(result.totalLines()).isEqualTo(3);
             assertThat(result.errorCount()).isZero();
         }
@@ -105,9 +112,9 @@ class AccessLogCsvParserTest {
         void parsesCsvWithBom() {
             String csv = "\uFEFF" + HEADER + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
-            assertThat(result.entries()).hasSize(1);
+            assertThat(result.successCount()).isEqualTo(1);
             assertThat(result.errorCount()).isZero();
         }
 
@@ -117,9 +124,10 @@ class AccessLogCsvParserTest {
             String line = "\"1/29/2026, 5:44:10.000 AM\",112.144.4.88,POST,/api/test,Agent/1.0,200,HTTP/1.1,3227,999,0.001,TLSv1.3,/api/test";
             String csv = HEADER + "\n" + line;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            List<AccessLogEntry> captured = new ArrayList<>();
+            parser.parse(toInputStream(csv), captured::add);
 
-            assertThat(result.entries().getFirst().clientResponseTime()).isEqualTo(0.001);
+            assertThat(captured.getFirst().clientResponseTime()).isEqualTo(0.001);
         }
     }
 
@@ -130,9 +138,9 @@ class AccessLogCsvParserTest {
         @Test
         @DisplayName("헤더만 있는 CSV는 빈 결과를 반환한다")
         void returnsEmptyForHeaderOnly() {
-            ParseResult result = parser.parse(toInputStream(HEADER));
+            ParseResult result = parser.parse(toInputStream(HEADER), entry -> {});
 
-            assertThat(result.entries()).isEmpty();
+            assertThat(result.successCount()).isZero();
             assertThat(result.totalLines()).isZero();
             assertThat(result.errorCount()).isZero();
         }
@@ -140,9 +148,9 @@ class AccessLogCsvParserTest {
         @Test
         @DisplayName("빈 InputStream은 빈 결과를 반환한다")
         void returnsEmptyForEmptyInput() {
-            ParseResult result = parser.parse(toInputStream(""));
+            ParseResult result = parser.parse(toInputStream(""), entry -> {});
 
-            assertThat(result.entries()).isEmpty();
+            assertThat(result.successCount()).isZero();
             assertThat(result.totalLines()).isZero();
             assertThat(result.errorCount()).isZero();
         }
@@ -158,9 +166,9 @@ class AccessLogCsvParserTest {
             String badLine = "a,b,c";
             String csv = HEADER + "\n" + badLine + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
-            assertThat(result.entries()).hasSize(1);
+            assertThat(result.successCount()).isEqualTo(1);
             assertThat(result.totalLines()).isEqualTo(2);
             assertThat(result.errorCount()).isEqualTo(1);
             assertThat(result.errorSamples()).containsExactly(badLine);
@@ -172,9 +180,9 @@ class AccessLogCsvParserTest {
             String badLine = "\"1/29/2026, 5:44:10.000 AM\",121.158.115.86,GET,/test,Agent,notANumber,HTTP/1.1,176,1138,0,TLSv1.2,/test";
             String csv = HEADER + "\n" + badLine + "\n" + VALID_LINE;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
-            assertThat(result.entries()).hasSize(1);
+            assertThat(result.successCount()).isEqualTo(1);
             assertThat(result.totalLines()).isEqualTo(2);
             assertThat(result.errorCount()).isEqualTo(1);
         }
@@ -184,9 +192,9 @@ class AccessLogCsvParserTest {
         void skipsBlankLinesWithoutCounting() {
             String csv = HEADER + "\n\n" + VALID_LINE + "\n\n";
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
-            assertThat(result.entries()).hasSize(1);
+            assertThat(result.successCount()).isEqualTo(1);
             assertThat(result.totalLines()).isEqualTo(1);
             assertThat(result.errorCount()).isZero();
         }
@@ -199,7 +207,7 @@ class AccessLogCsvParserTest {
                     .collect(Collectors.joining("\n"));
             String csv = HEADER + "\n" + badLines;
 
-            ParseResult result = parser.parse(toInputStream(csv));
+            ParseResult result = parser.parse(toInputStream(csv), entry -> {});
 
             assertThat(result.errorCount()).isEqualTo(15);
             assertThat(result.errorSamples()).hasSize(10);
