@@ -1,7 +1,6 @@
 package benny.accessloganalyzer.service;
 
 import benny.accessloganalyzer.global.exception.BusinessException;
-import benny.accessloganalyzer.model.AccessLogEntry;
 import benny.accessloganalyzer.model.AnalysisEntry;
 import benny.accessloganalyzer.model.AnalysisResult;
 import benny.accessloganalyzer.model.AnalysisStatus;
@@ -14,14 +13,13 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -82,36 +80,24 @@ public class AnalysisService {
     }
 
     private AnalysisResult analyze(InputStream inputStream, String analysisId) {
-        ParseResult parseResult = parser.parse(inputStream);
+        Map<String, Long> statusCodeCounts = new HashMap<>();
+        Map<String, Long> statusGroupCounts = new HashMap<>();
+        Map<String, Long> pathCounts = new HashMap<>();
+        Map<String, Long> ipCounts = new HashMap<>();
+
+        ParseResult parseResult = parser.parse(inputStream, entry -> {
+            statusCodeCounts.merge(String.valueOf(entry.httpStatus()), 1L, Long::sum);
+            statusGroupCounts.merge((entry.httpStatus() / 100) + "xx", 1L, Long::sum);
+            pathCounts.merge(entry.requestUri(), 1L, Long::sum);
+            ipCounts.merge(entry.clientIp(), 1L, Long::sum);
+        });
 
         validate(parseResult);
-
-        List<AccessLogEntry> entries = parseResult.entries();
-
-        Map<String, Long> statusCodeCounts = entries.stream()
-                .collect(Collectors.groupingBy(
-                        e -> String.valueOf(e.httpStatus()),
-                        Collectors.counting()));
-
-        Map<String, Long> statusGroupCounts = entries.stream()
-                .collect(Collectors.groupingBy(
-                        e -> (e.httpStatus() / 100) + "xx",
-                        Collectors.counting()));
-
-        Map<String, Long> pathCounts = entries.stream()
-                .collect(Collectors.groupingBy(
-                        AccessLogEntry::requestUri,
-                        Collectors.counting()));
-
-        Map<String, Long> ipCounts = entries.stream()
-                .collect(Collectors.groupingBy(
-                        AccessLogEntry::clientIp,
-                        Collectors.counting()));
 
         return new AnalysisResult(
                 analysisId,
                 LocalDateTime.now(),
-                entries.size(),
+                parseResult.successCount(),
                 statusCodeCounts,
                 statusGroupCounts,
                 pathCounts,
@@ -143,7 +129,7 @@ public class AnalysisService {
             throw BusinessException.invalidLogFile(
                     "최대 라인 수(" + maxLines + ")를 초과했습니다: " + parseResult.totalLines());
         }
-        if (parseResult.entries().isEmpty()) {
+        if (parseResult.successCount() == 0) {
             throw BusinessException.invalidLogFile("유효한 로그 데이터가 없습니다");
         }
     }

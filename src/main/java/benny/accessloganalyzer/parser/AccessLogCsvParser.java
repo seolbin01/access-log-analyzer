@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Slf4j
 @Component
@@ -21,8 +22,8 @@ public class AccessLogCsvParser {
 
     private final CsvLineParser csvLineParser = new CsvLineParser();
 
-    public ParseResult parse(InputStream inputStream) {
-        List<AccessLogEntry> entries = new ArrayList<>();
+    public ParseResult parse(InputStream inputStream, Consumer<AccessLogEntry> entryConsumer) {
+        int successCount = 0;
         int totalLines = 0;
         int errorCount = 0;
         List<String> errorSamples = new ArrayList<>();
@@ -33,7 +34,7 @@ public class AccessLogCsvParser {
             // 첫 줄(헤더) 스킵
             String headerLine = reader.readLine();
             if (headerLine == null) {
-                return new ParseResult(entries, 0, 0, errorSamples);
+                return new ParseResult(0, 0, 0, errorSamples);
             }
 
             String line;
@@ -47,7 +48,8 @@ public class AccessLogCsvParser {
 
                 try {
                     AccessLogEntry entry = parseLine(line);
-                    entries.add(entry);
+                    entryConsumer.accept(entry);
+                    successCount++;
                 } catch (Exception e) {
                     errorCount++;
                     if (errorSamples.size() < MAX_ERROR_SAMPLES) {
@@ -59,12 +61,12 @@ public class AccessLogCsvParser {
             throw new RuntimeException("CSV 파일 읽기 실패", e);
         }
 
-        log.info("CSV 파싱 완료: totalLines={}, successCount={}, errorCount={}", totalLines, entries.size(), errorCount);
+        log.info("CSV 파싱 완료: totalLines={}, successCount={}, errorCount={}", totalLines, successCount, errorCount);
         if (errorCount > 0) {
             log.warn("파싱 오류 발생: errorCount={}, samples={}", errorCount, errorSamples);
         }
 
-        return new ParseResult(entries, totalLines, errorCount, errorSamples);
+        return new ParseResult(successCount, totalLines, errorCount, errorSamples);
     }
 
     private AccessLogEntry parseLine(String line) {
