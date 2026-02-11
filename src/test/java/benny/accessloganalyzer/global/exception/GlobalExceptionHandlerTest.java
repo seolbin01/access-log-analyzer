@@ -1,5 +1,6 @@
 package benny.accessloganalyzer.global.exception;
 
+import benny.accessloganalyzer.client.IpInfoClient;
 import benny.accessloganalyzer.service.AnalysisService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,9 @@ class GlobalExceptionHandlerTest {
 
     @MockitoBean
     private AnalysisService analysisService;
+
+    @MockitoBean
+    private IpInfoClient ipInfoClient;
 
     @RestController
     static class TestController {
