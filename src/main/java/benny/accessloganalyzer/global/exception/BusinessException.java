@@ -30,4 +30,8 @@ public class BusinessException extends RuntimeException {
     public static BusinessException analysisQueueFull(String message) {
         return new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "ANALYSIS_QUEUE_FULL", message);
     }
+
+    public static BusinessException invalidParameter(String message) {
+        return new BusinessException(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", message);
+    }
 }

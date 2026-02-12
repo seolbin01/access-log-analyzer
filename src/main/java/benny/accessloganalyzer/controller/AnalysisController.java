@@ -80,6 +80,10 @@ public class AnalysisController {
     public ResponseEntity<?> getAnalysisResult(
             @PathVariable String analysisId,
             @RequestParam(defaultValue = "10") int top) {
+        if (top < 1) {
+            throw BusinessException.invalidParameter("top 파라미터는 1 이상이어야 합니다.");
+        }
+
         AnalysisEntry entry = analysisService.getEntry(analysisId);
 
         return switch (entry.getStatus()) {
