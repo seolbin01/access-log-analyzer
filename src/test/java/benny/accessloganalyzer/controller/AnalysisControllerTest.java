@@ -230,6 +230,26 @@ class AnalysisControllerTest {
                     .andExpect(jsonPath("$.topIps.length()").value(2));
         }
 
+        @DisplayName("top이 0이면 400을 반환한다")
+        @Test
+        void invalidTopZero() throws Exception {
+            AnalysisEntry entry = createEntryWithStatus("test-uuid-1234", AnalysisStatus.COMPLETED);
+            given(analysisService.getEntry("test-uuid-1234")).willReturn(entry);
+
+            mockMvc.perform(get("/analysis/{id}", "test-uuid-1234").param("top", "0"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @DisplayName("top이 음수이면 400을 반환한다")
+        @Test
+        void invalidTopNegative() throws Exception {
+            AnalysisEntry entry = createEntryWithStatus("test-uuid-1234", AnalysisStatus.COMPLETED);
+            given(analysisService.getEntry("test-uuid-1234")).willReturn(entry);
+
+            mockMvc.perform(get("/analysis/{id}", "test-uuid-1234").param("top", "-1"))
+                    .andExpect(status().isBadRequest());
+        }
+
         @DisplayName("COMPLETED 상태에서 topIps에 IP 지리 정보가 포함된다")
         @Test
         void completedIncludesIpGeoInfo() throws Exception {
