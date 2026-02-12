@@ -8,6 +8,7 @@ import benny.accessloganalyzer.global.exception.BusinessException;
 import benny.accessloganalyzer.global.exception.ErrorResponse;
 import benny.accessloganalyzer.model.AnalysisEntry;
 import benny.accessloganalyzer.service.AnalysisService;
+import lombok.extern.slf4j.Slf4j;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,8 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
+@Slf4j
 @Tag(name = "Analysis", description = "로그 분석 API")
 @RestController
 public class AnalysisController {
@@ -52,13 +56,16 @@ public class AnalysisController {
             throw BusinessException.invalidLogFile("업로드된 파일이 비어 있습니다");
         }
 
+        Path tempFile = null;
         try {
-            byte[] fileBytes = file.getBytes();
-            String analysisId = analysisService.submitAnalysis(fileBytes);
+            tempFile = Files.createTempFile("access-log-", ".csv");
+            file.transferTo(tempFile);
+            String analysisId = analysisService.submitAnalysis(tempFile);
             AnalysisEntry entry = analysisService.getEntry(analysisId);
             int queuePosition = analysisService.getQueuePosition(entry);
             return ResponseEntity.status(202).body(AnalysisResponse.queued(analysisId, queuePosition));
         } catch (IOException e) {
+            deleteTempFile(tempFile);
             throw BusinessException.invalidLogFile("파일을 읽을 수 없습니다: " + e.getMessage());
         }
     }
@@ -87,5 +94,15 @@ public class AnalysisController {
             }
             case FAILED -> ResponseEntity.ok(AnalysisResponse.failed(analysisId, entry.getErrorMessage()));
         };
+    }
+
+    private void deleteTempFile(Path tempFile) {
+        if (tempFile != null) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException e) {
+                log.warn("임시 파일 삭제 실패: {}", tempFile, e);
+            }
+        }
     }
 }

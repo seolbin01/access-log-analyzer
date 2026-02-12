@@ -10,8 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,30 +46,31 @@ public class AnalysisService {
         this.executor = executor;
     }
 
-    public String submitAnalysis(byte[] fileBytes) {
+    public String submitAnalysis(Path tempFile) {
         String analysisId = UUID.randomUUID().toString();
         AnalysisEntry entry = new AnalysisEntry(analysisId, orderSequence.incrementAndGet());
         store.put(analysisId, entry);
 
         try {
-            executor.execute(() -> executeAnalysis(analysisId, fileBytes));
+            executor.execute(() -> executeAnalysis(analysisId, tempFile));
         } catch (RejectedExecutionException e) {
             store.remove(analysisId);
+            deleteTempFile(tempFile);
             throw BusinessException.analysisQueueFull("분석 큐가 가득 찼습니다. 잠시 후 다시 시도해주세요.");
         }
 
         return analysisId;
     }
 
-    private void executeAnalysis(String analysisId, byte[] fileBytes) {
+    private void executeAnalysis(String analysisId, Path tempFile) {
         AnalysisEntry entry = store.get(analysisId);
         entry.startProcessing();
 
         log.info("분석 시작: analysisId={}", analysisId);
         long startNanos = System.nanoTime();
 
-        try {
-            AnalysisResult result = analyze(new ByteArrayInputStream(fileBytes), analysisId);
+        try (InputStream inputStream = Files.newInputStream(tempFile)) {
+            AnalysisResult result = analyze(inputStream, analysisId);
             entry.complete(result);
 
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
@@ -76,6 +79,16 @@ public class AnalysisService {
         } catch (Exception e) {
             log.error("분석 실패: analysisId={}", analysisId, e);
             entry.fail(e.getMessage());
+        } finally {
+            deleteTempFile(tempFile);
+        }
+    }
+
+    private void deleteTempFile(Path tempFile) {
+        try {
+            Files.deleteIfExists(tempFile);
+        } catch (IOException e) {
+            log.warn("임시 파일 삭제 실패: {}", tempFile, e);
         }
     }
 

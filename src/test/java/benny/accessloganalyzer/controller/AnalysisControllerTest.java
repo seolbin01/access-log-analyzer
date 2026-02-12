@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,7 @@ class AnalysisControllerTest {
         @Test
         void uploadReturns202WithQueued() throws Exception {
             AnalysisEntry queuedEntry = new AnalysisEntry("test-uuid-1234");
-            given(analysisService.submitAnalysis(any(byte[].class))).willReturn("test-uuid-1234");
+            given(analysisService.submitAnalysis(any(Path.class))).willReturn("test-uuid-1234");
             given(analysisService.getEntry("test-uuid-1234")).willReturn(queuedEntry);
             given(analysisService.getQueuePosition(queuedEntry)).willReturn(1);
 
@@ -115,7 +116,7 @@ class AnalysisControllerTest {
         @DisplayName("큐가 가득 찼을 때 503을 반환한다")
         @Test
         void returns503WhenQueueFull() throws Exception {
-            given(analysisService.submitAnalysis(any(byte[].class)))
+            given(analysisService.submitAnalysis(any(Path.class)))
                     .willThrow(BusinessException.analysisQueueFull("분석 큐가 가득 찼습니다"));
 
             MockMultipartFile file = new MockMultipartFile(
