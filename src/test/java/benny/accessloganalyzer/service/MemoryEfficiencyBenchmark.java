@@ -9,10 +9,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import java.io.IOException;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executor;
@@ -33,35 +35,41 @@ class MemoryEfficiencyBenchmark {
     private static final Executor SYNC_EXECUTOR = Runnable::run;
     private static final String HEADER = "TimeGenerated [UTC],ClientIp,HttpMethod,RequestUri,UserAgent,HttpStatus,HttpVersion,ReceivedBytes,SentBytes,ClientResponseTime,SslProtocol,OriginalRequestUriWithArgs";
 
-    private static byte[] largeCsv;
-    private static byte[] warmupCsv;
+    private static String largeCsvContent;
+    private static String warmupCsvContent;
 
     @BeforeAll
     static void generateTestData() {
         System.out.println("=== 테스트 데이터 생성 중 ===");
 
-        warmupCsv = generateCsv(WARMUP_LINE_COUNT);
-        largeCsv = generateCsv(LINE_COUNT);
+        warmupCsvContent = generateCsv(WARMUP_LINE_COUNT);
+        largeCsvContent = generateCsv(LINE_COUNT);
 
         System.out.printf("CSV 데이터 크기: %.2f MB (%,d lines)%n",
-                largeCsv.length / (1024.0 * 1024.0), LINE_COUNT);
+                largeCsvContent.length() / (1024.0 * 1024.0), LINE_COUNT);
         System.out.println();
+    }
+
+    private static Path toTempFile(String csv) throws IOException {
+        Path tempFile = Files.createTempFile("bench-log-", ".csv");
+        Files.writeString(tempFile, csv);
+        return tempFile;
     }
 
     @Test
     @Order(1)
-    void warmup() {
+    void warmup() throws IOException {
         System.out.println("=== 워밍업 (JIT 컴파일 유도) ===");
         AnalysisService service = createService();
         for (int i = 0; i < 5; i++) {
-            service.submitAnalysis(warmupCsv);
+            service.submitAnalysis(toTempFile(warmupCsvContent));
         }
         System.out.println("워밍업 완료\n");
     }
 
     @Test
     @Order(2)
-    void benchmarkMemoryAndTime() {
+    void benchmarkMemoryAndTime() throws IOException {
         System.out.println("=== 메모리 효율성 벤치마크 시작 ===");
         System.out.printf("대상: %,d lines × %d iterations%n%n", LINE_COUNT, ITERATIONS);
 
@@ -85,7 +93,7 @@ class MemoryEfficiencyBenchmark {
 
             // 실행
             long startNanos = System.nanoTime();
-            String analysisId = service.submitAnalysis(largeCsv);
+            String analysisId = service.submitAnalysis(toTempFile(largeCsvContent));
             long endNanos = System.nanoTime();
 
             // 결과 확인
@@ -134,7 +142,7 @@ class MemoryEfficiencyBenchmark {
         return new AnalysisService(new AccessLogCsvParser(), LINE_COUNT + 1, SYNC_EXECUTOR);
     }
 
-    private static byte[] generateCsv(int lineCount) {
+    private static String generateCsv(int lineCount) {
         Random random = new Random(42);
         String[] paths = {"/api/users", "/api/orders", "/api/products", "/api/auth/login",
                 "/api/auth/logout", "/event/banner/popup", "/assets/main.css",
@@ -180,7 +188,7 @@ class MemoryEfficiencyBenchmark {
             sb.append(path).append('\n');
         }
 
-        return sb.toString().getBytes(StandardCharsets.UTF_8);
+        return sb.toString();
     }
 
     private static void forceGc() {
